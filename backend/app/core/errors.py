@@ -80,6 +80,12 @@ class LLMRequestRejectedError(AppError):
     default_message = "The AI provider rejected the request. Please check the server configuration."
 
 
+class AccessDeniedError(AppError):
+    status_code = 401
+    code = "access_denied"
+    default_message = "A valid access key is required. Enter it on the Settings page."
+
+
 class RateLimitExceededError(AppError):
     status_code = 429
     code = "rate_limited"

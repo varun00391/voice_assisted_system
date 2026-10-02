@@ -1,3 +1,4 @@
+import hmac
 import logging
 import re
 import time
@@ -8,7 +9,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.errors import AppError, RateLimitExceededError
+from app.core.errors import AccessDeniedError, AppError, RateLimitExceededError
 from app.core.logging import request_id_var
 
 logger = logging.getLogger("app.request")
@@ -77,6 +78,21 @@ class SlidingWindowRateLimiter:
     def _prune(self, now: float) -> None:
         for key in [k for k, v in self._hits.items() if not v or now - v[-1] >= self._window]:
             del self._hits[key]
+
+
+class AccessKeyMiddleware(BaseHTTPMiddleware):
+    """Requires the shared X-Access-Key header on /api routes when an access key is configured."""
+
+    def __init__(self, app, access_key: str | None):
+        super().__init__(app)
+        self._expected = access_key.encode() if access_key else None
+
+    async def dispatch(self, request: Request, call_next):
+        if self._expected and request.url.path.startswith("/api/") and request.method != "OPTIONS":
+            provided = request.headers.get("X-Access-Key", "").encode()
+            if not hmac.compare_digest(provided, self._expected):
+                return error_response(AccessDeniedError(), request_id_var.get())
+        return await call_next(request)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

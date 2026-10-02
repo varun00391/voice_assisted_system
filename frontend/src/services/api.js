@@ -1,3 +1,5 @@
+import { preferences } from "./preferences.js";
+
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 const DEFAULT_ERROR = "Something went wrong. Please try again.";
@@ -13,10 +15,13 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = "GET", body, headers } = {}) {
+async function request(path, { method = "GET", body, headers = {} } = {}) {
+  const accessKey = preferences.getAccessKey();
+  const allHeaders = accessKey ? { ...headers, "X-Access-Key": accessKey } : headers;
+
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { method, body, headers });
+    response = await fetch(`${API_BASE_URL}${path}`, { method, body, headers: allHeaders });
   } catch {
     throw new ApiError(NETWORK_ERROR, { code: "network_error" });
   }

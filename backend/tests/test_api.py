@@ -23,7 +23,7 @@ def fetch_logs(settings) -> list[LLMRequestLog]:
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.json() == {"status": "healthy", "version": "dev"}
     assert response.headers["X-Request-ID"]
 
 
@@ -267,3 +267,33 @@ def test_rate_limit(settings, groq, euron, stt):
         assert response.status_code == 429
         assert response.json()["error"]["code"] == "rate_limited"
         assert limited.get("/health").status_code == 200
+
+
+def test_access_key_is_required_for_api_routes_when_configured(settings, groq, euron, stt):
+    from fastapi.testclient import TestClient
+    from pydantic import SecretStr
+
+    from app.main import create_app
+
+    settings.api_access_key = SecretStr("s3cret-key")
+    settings.cors_origins = "https://app.example.com"
+    with TestClient(create_app(settings, stt_provider=stt, llm_providers=[groq, euron])) as protected:
+        missing = protected.get("/api/v1/modes", headers={"Origin": "https://app.example.com"})
+        assert missing.status_code == 401
+        assert missing.json()["error"]["code"] == "access_denied"
+        assert missing.headers["access-control-allow-origin"] == "https://app.example.com"
+
+        assert protected.get("/api/v1/modes", headers={"X-Access-Key": "wrong"}).status_code == 401
+        assert protected.get("/api/v1/modes", headers={"X-Access-Key": "s3cret-key"}).status_code == 200
+        assert protected.get("/health").status_code == 200
+
+        preflight = protected.options(
+            "/api/v1/chat",
+            headers={
+                "Origin": "https://app.example.com",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type,x-access-key",
+            },
+        )
+        assert preflight.status_code == 200
+        assert "x-access-key" in preflight.headers["access-control-allow-headers"].lower()

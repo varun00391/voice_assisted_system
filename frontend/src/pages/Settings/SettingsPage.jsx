@@ -9,9 +9,11 @@ const STATE_STYLES = {
   unavailable: "bg-red-100 text-red-800",
 };
 
-export default function SettingsPage() {
+export default function SettingsPage({ onAccessKeyChange }) {
   const [instructions, setInstructions] = useState(preferences.getCustomInstructions);
   const [saved, setSaved] = useState(false);
+  const [accessKey, setAccessKey] = useState(preferences.getAccessKey);
+  const [accessKeySaved, setAccessKeySaved] = useState(false);
   const [providers, setProviders] = useState(null);
   const [healthError, setHealthError] = useState(null);
 
@@ -34,9 +36,45 @@ export default function SettingsPage() {
     setSaved(true);
   }
 
+  function saveAccessKey(event) {
+    event.preventDefault();
+    preferences.setAccessKey(accessKey.trim());
+    setAccessKeySaved(true);
+    onAccessKeyChange?.();
+    loadHealth();
+  }
+
   return (
     <div className="h-full overflow-y-auto px-4 py-8">
       <div className="mx-auto max-w-3xl space-y-6">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold">Access key</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Required only when the server is protected with an access key. It is stored in this browser.
+          </p>
+          <form onSubmit={saveAccessKey} className="mt-4 flex gap-2">
+            <input
+              type="password"
+              autoComplete="off"
+              aria-label="Access key"
+              value={accessKey}
+              onChange={(event) => {
+                setAccessKey(event.target.value);
+                setAccessKeySaved(false);
+              }}
+              placeholder="Paste the access key"
+              className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Save
+            </button>
+          </form>
+          {accessKeySaved && <p className="mt-2 text-sm text-emerald-700">Saved</p>}
+        </section>
+
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold">Custom mode instructions</h2>
           <p className="mt-1 text-sm text-slate-600">Used when the answer mode is set to “Custom”.</p>

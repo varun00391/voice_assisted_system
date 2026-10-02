@@ -18,8 +18,10 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "development"
+    app_version: str = "dev"
     log_level: str = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    api_access_key: SecretStr | None = None
 
     llm_provider_order: str = "groq,euron"
     llm_timeout_seconds: float = 30.0

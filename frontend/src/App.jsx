@@ -31,11 +31,9 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
+  const loadAppData = useCallback(() => {
+    setLoadError(null);
     refreshProviders();
-  }, [refreshProviders]);
-
-  useEffect(() => {
     api
       .getModes()
       .then(({ default: defaultMode, modes: available }) => {
@@ -47,7 +45,11 @@ export default function App() {
       .getConfig()
       .then((config) => setMaxRecordingSeconds(Math.floor(config.max_audio_duration_seconds)))
       .catch(() => {});
-  }, []);
+  }, [refreshProviders]);
+
+  useEffect(() => {
+    loadAppData();
+  }, [loadAppData]);
 
   function changeMode(nextMode) {
     setMode(nextMode);
@@ -100,7 +102,7 @@ export default function App() {
           />
         </div>
         {page === "profile" && <ProfilePage />}
-        {page === "settings" && <SettingsPage />}
+        {page === "settings" && <SettingsPage onAccessKeyChange={loadAppData} />}
       </main>
     </div>
   );

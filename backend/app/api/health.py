@@ -6,8 +6,8 @@ router = APIRouter()
 
 
 @router.get("/health")
-async def health() -> dict:
-    return {"status": "healthy"}
+async def health(settings: SettingsDep) -> dict:
+    return {"status": "healthy", "version": settings.app_version}
 
 
 @router.get("/api/v1/config")

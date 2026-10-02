@@ -57,6 +57,26 @@ describe("api", () => {
     expect(error.code).toBe("network_error");
   });
 
+  it("sends the stored access key with every request", async () => {
+    localStorage.setItem("voice-assistant.access-key", "s3cret");
+    const fetchMock = mockFetch(200, { answer: "hi" });
+
+    await api.chat({ message: "Hello", mode: "concise" });
+    await api.getModes();
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({ "Content-Type": "application/json", "X-Access-Key": "s3cret" });
+    expect(fetchMock.mock.calls[1][1].headers).toEqual({ "X-Access-Key": "s3cret" });
+    localStorage.removeItem("voice-assistant.access-key");
+  });
+
+  it("sends no access key header when none is stored", async () => {
+    const fetchMock = mockFetch(200, {});
+
+    await api.getModes();
+
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({});
+  });
+
   it("uploads recordings as multipart form data", async () => {
     const fetchMock = mockFetch(200, { text: "Explain RAG" });
 

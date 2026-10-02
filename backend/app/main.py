@@ -9,10 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import chat, conversations, health, modes, user_context, voice
-from app.config.settings import Settings, get_settings
+from app.config.settings import Settings, api_key_value, get_settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging, request_id_var
-from app.core.middleware import RateLimitMiddleware, RequestContextMiddleware, error_response
+from app.core.middleware import AccessKeyMiddleware, RateLimitMiddleware, RequestContextMiddleware, error_response
 from app.models.database import create_database, init_database
 from app.providers.llm.base import LLMProvider
 from app.providers.llm.factory import build_llm_providers
@@ -71,13 +71,14 @@ def create_app(
 
     app = FastAPI(title="Voice-Assisted AI Assistant", version="1.0.0", lifespan=lifespan)
 
+    app.add_middleware(AccessKeyMiddleware, access_key=api_key_value(settings.api_access_key))
     app.add_middleware(RateLimitMiddleware, limit_per_minute=settings.rate_limit_per_minute)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "X-Request-ID"],
+        allow_headers=["Content-Type", "X-Request-ID", "X-Access-Key"],
         expose_headers=["X-Request-ID"],
     )
 

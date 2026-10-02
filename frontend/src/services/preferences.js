@@ -1,6 +1,7 @@
 const MODE_KEY = "voice-assistant.mode";
 const PROVIDER_KEY = "voice-assistant.provider";
 const CUSTOM_INSTRUCTIONS_KEY = "voice-assistant.custom-instructions";
+const ACCESS_KEY = "voice-assistant.access-key";
 
 function read(key, fallback) {
   try {
@@ -25,4 +26,6 @@ export const preferences = {
   setProvider: (provider) => write(PROVIDER_KEY, provider),
   getCustomInstructions: () => read(CUSTOM_INSTRUCTIONS_KEY, ""),
   setCustomInstructions: (text) => write(CUSTOM_INSTRUCTIONS_KEY, text),
+  getAccessKey: () => read(ACCESS_KEY, ""),
+  setAccessKey: (key) => write(ACCESS_KEY, key),
 };
