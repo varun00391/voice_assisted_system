@@ -87,10 +87,20 @@ class OpenAICompatibleProvider(LLMProvider):
         if status < 400:
             return
         detail = f"{self.name} returned HTTP {status}: {response.text[:300]}"
-        if status == 429:
+        # Groq uses 429 when the per-minute budget is used up, and 413 with
+        # code rate_limit_exceeded when this one request is larger than that budget.
+        if status == 429 or (status == 413 and _is_rate_limit_response(response)):
             raise LLMProviderError(detail, error_type="rate_limited", retryable=True, status_code=status)
         if status == 408 or status >= 500:
             raise LLMProviderError(detail, error_type="server_error", retryable=True, status_code=status)
         if status in (401, 403):
             raise LLMProviderError(detail, error_type="auth_error", retryable=False, status_code=status)
         raise LLMProviderError(detail, error_type="invalid_request", retryable=False, status_code=status)
+
+
+def _is_rate_limit_response(response: httpx.Response) -> bool:
+    body = response.text.lower()
+    return any(
+        marker in body
+        for marker in ("rate_limit_exceeded", "rate limit", "tokens per minute", "tokens per day")
+    )

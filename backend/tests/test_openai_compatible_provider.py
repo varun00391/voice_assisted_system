@@ -39,6 +39,7 @@ async def test_successful_completion_sends_openai_payload():
         (401, "auth_error", False),
         (400, "invalid_request", False),
         (404, "invalid_request", False),
+        (413, "invalid_request", False),
     ],
 )
 async def test_http_errors_are_classified(status, error_type, retryable):

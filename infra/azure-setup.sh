@@ -117,11 +117,19 @@ az identity show -n "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" -o none 2>/dev/null 
   || az identity create -n "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" -l "$LOCATION" -o none
 DEPLOY_CLIENT_ID=$(az identity show -n "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" --query clientId -o tsv)
 DEPLOY_PRINCIPAL_ID=$(az identity show -n "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" --query principalId -o tsv)
-az identity federated-credential show --name github-main --identity-name "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" -o none 2>/dev/null \
-  || az identity federated-credential create --name github-main --identity-name "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" \
-       --issuer https://token.actions.githubusercontent.com \
-       --subject "repo:$GITHUB_REPO:ref:refs/heads/main" \
-       --audiences api://AzureADTokenExchange -o none
+# GitHub includes the account and repository ids in the token subject, so the name-only form never matches.
+SUBJECT_PREFIX=$(gh api "repos/$GITHUB_REPO/actions/oidc/customization/sub" --jq '.sub_claim_prefix // empty')
+OIDC_SUBJECT="${SUBJECT_PREFIX:-repo:$GITHUB_REPO}:ref:refs/heads/main"
+CURRENT_SUBJECT=$(az identity federated-credential show --name github-main --identity-name "$DEPLOY_IDENTITY" \
+  -g "$RESOURCE_GROUP" --query subject -o tsv 2>/dev/null || true)
+if [ -z "$CURRENT_SUBJECT" ]; then
+  az identity federated-credential create --name github-main --identity-name "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" \
+    --issuer https://token.actions.githubusercontent.com --subject "$OIDC_SUBJECT" \
+    --audiences api://AzureADTokenExchange -o none
+elif [ "$CURRENT_SUBJECT" != "$OIDC_SUBJECT" ]; then
+  az identity federated-credential update --name github-main --identity-name "$DEPLOY_IDENTITY" -g "$RESOURCE_GROUP" \
+    --subject "$OIDC_SUBJECT" -o none
+fi
 ENVIRONMENT_ID=$(az containerapp env show -n "$ENVIRONMENT" -g "$RESOURCE_GROUP" --query id -o tsv)
 assign_role "$DEPLOY_PRINCIPAL_ID" AcrPush "$ACR_ID"
 assign_role "$DEPLOY_PRINCIPAL_ID" Reader "$ACR_ID"

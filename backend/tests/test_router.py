@@ -1,3 +1,4 @@
+import httpx
 import pytest
 
 from app.core.errors import (
@@ -6,6 +7,7 @@ from app.core.errors import (
     NoProvidersConfiguredError,
     ProviderNotConfiguredError,
 )
+from app.providers.llm.groq import GroqProvider
 from app.services.llm.circuit_breaker import CircuitBreaker, ProviderHealth
 from app.services.llm.router import LLMRouter
 from tests.fakes import FakeLLMProvider, Truncated, auth_error, incomplete, rate_limited, server_error, timeout
@@ -50,6 +52,52 @@ async def test_retryable_failure_falls_back(failure):
     assert result.provider == "euron"
     assert result.fallback_used
     assert [a.status for a in result.attempts] == [failure().error_type, "success"]
+
+
+async def test_groq_tpm_413_falls_back_to_euron():
+    """Groq rejects an over-budget request with 413 and code rate_limit_exceeded, not 429."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            413,
+            json={
+                "error": {
+                    "message": (
+                        "Request too large for model `qwen/qwen3.8-27b` on tokens per minute (TPM): "
+                        "Limit 8000, Requested 9000."
+                    ),
+                    "type": "tokens",
+                    "code": "rate_limit_exceeded",
+                }
+            },
+        )
+
+    groq = GroqProvider(
+        base_url="https://llm.test/v1", api_key="secret", model="qwen/qwen3.8-27b",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)), timeout_seconds=5,
+    )
+    euron = FakeLLMProvider("euron", ["euron answer"])
+    result = await make_router(groq, euron).generate(MESSAGES)
+
+    assert result.provider == "euron"
+    assert result.content == "euron answer"
+    assert result.fallback_used
+    assert [attempt.status for attempt in result.attempts] == ["rate_limited", "success"]
+
+
+async def test_oversized_413_without_rate_limit_does_not_fall_back():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(413, text="Payload Too Large")
+
+    groq = GroqProvider(
+        base_url="https://llm.test/v1", api_key="secret", model="qwen/qwen3.8-27b",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)), timeout_seconds=5,
+    )
+    euron = FakeLLMProvider("euron", ["euron answer"])
+    with pytest.raises(LLMRequestRejectedError):
+        await make_router(groq, euron).generate(MESSAGES)
+
+    assert euron.calls == []
 
 
 async def test_non_retryable_failure_is_not_masked_by_fallback():
